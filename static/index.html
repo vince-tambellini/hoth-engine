@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hoth Industries — Supplier Recommendations</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Hoth Industries</h1>
+    <p class="subtitle">Supplier Recommendation Engine</p>
+  </header>
+
+  <main>
+    <!-- Input section -->
+    <section id="input-section">
+      <div class="input-wrapper">
+        <input
+          type="text"
+          id="query-input"
+          placeholder="What do you need to source?"
+          autocomplete="off"
+        >
+        <button id="submit-btn">Get Recommendation</button>
+      </div>
+      <div id="chips">
+        <button class="chip" data-query="200 aluminum heat exchangers, need delivery in 4 weeks">200 aluminum heat exchangers</button>
+        <button class="chip" data-query="Brackets for the CoreWeave project">Brackets for CoreWeave</button>
+        <button class="chip" data-query="Who should we use for 10HP motors?">10HP motors</button>
+        <button class="chip" data-query="HEPA filters for data center cleanroom">HEPA filters</button>
+      </div>
+    </section>
+
+    <!-- Loading -->
+    <div id="loading" class="hidden">
+      <div class="spinner"></div>
+      <p>Analyzing supplier data...</p>
+    </div>
+
+    <!-- Matched category badge -->
+    <div id="category-badge" class="hidden"></div>
+
+    <!-- Recommendation cards -->
+    <section id="results" class="hidden">
+      <div id="card-recommended" class="card card-green">
+        <div class="card-label">Recommended</div>
+        <h2 class="card-supplier"></h2>
+        <p class="card-reason"></p>
+        <div class="card-stats"></div>
+      </div>
+
+      <div id="card-alternative" class="card card-blue">
+        <div class="card-label">Alternative</div>
+        <h2 class="card-supplier"></h2>
+        <p class="card-reason"></p>
+        <div class="card-stats"></div>
+      </div>
+
+      <div id="card-avoid" class="card card-red">
+        <div class="card-label">Avoid</div>
+        <h2 class="card-supplier"></h2>
+        <p class="card-reason"></p>
+        <div class="card-stats"></div>
+      </div>
+
+      <div id="context-bar"></div>
+    </section>
+
+    <!-- Chat section -->
+    <section id="chat-section" class="hidden">
+      <h3>Follow-up Questions</h3>
+      <div id="chat-messages"></div>
+      <div class="chat-input-wrapper">
+        <input
+          type="text"
+          id="chat-input"
+          placeholder="Ask a follow-up question..."
+          autocomplete="off"
+        >
+        <button id="chat-btn">Send</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

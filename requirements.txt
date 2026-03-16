@@ -1,0 +1,6 @@
+flask
+pandas
+anthropic
+faiss-cpu
+sentence-transformers
+python-dotenv
