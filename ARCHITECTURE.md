@@ -1,103 +1,136 @@
-# Architecture Diagram
+# Architecture Diagrams
 
-Paste the diagram below into [mermaid.live](https://mermaid.live) to get a shareable image (PNG/SVG).
+Go to [mermaid.live](https://mermaid.live), paste any diagram below into the left editor, then click the PNG or SVG export button to download a shareable image.
 
-## System Overview
+---
+
+## System Architecture
 
 ```mermaid
-graph TB
-    subgraph User
-        Browser["Browser (localhost:8000)"]
+graph TD
+    User["🖥️ User opens browser<br/>http://127.0.0.1:8000"]
+
+    User --> Input
+
+    subgraph Frontend["Frontend — Single Page App"]
+        direction TB
+        Input["Text Input<br/>'I need 200 heat exchangers'"]
+        Input --> RecCards
+        RecCards["Recommendation Cards<br/>✅ Recommended &nbsp; 🔵 Alternative &nbsp; 🔴 Avoid"]
+        RecCards --> ChatUI
+        ChatUI["Follow-up Chat<br/>'Why not QuickFab?'"]
     end
 
-    subgraph Frontend["Frontend — Static HTML/CSS/JS"]
-        Input["Search Input<br/>'I need 200 heat exchangers'"]
-        Cards["Recommendation Cards<br/>Recommended | Alternative | Avoid"]
-        Chat["Follow-up Chat"]
-    end
+    Input -- "POST /api/recommend" --> RecommendAPI
+    ChatUI -- "POST /api/chat" --> ChatAPI
 
-    subgraph Backend["Backend — Flask (Python)"]
+    subgraph Backend["Backend — Flask + Python"]
+        direction TB
 
-        subgraph DataPipeline["Data Pipeline (runs at startup)"]
-            Load["Load CSVs"]
-            Normalize["Entity Resolution<br/>4 Apex name variants → 1"]
-            Join["Inspection Join<br/>order_id + quantity match"]
-            Score["TCO Scoring Engine<br/>effective_cost = price × (1 + rej×0.5 + late×0.2)"]
+        subgraph Startup["Runs Once at Startup"]
+            direction TB
+            CSV["Load 4 Data Files"]
+            CSV --> Clean["Entity Resolution<br/>Merge 4 Apex name variants into 1"]
+            Clean --> JoinStep["Join Inspections → Orders<br/>Match on order_id + quantity"]
+            JoinStep --> ScoreStep["Compute TCO Scores<br/>Per supplier, per part category"]
+            ScoreStep --> BuildIndex["Build FAISS Vector Index<br/>Embed 13 part categories"]
         end
 
-        subgraph APIs["API Endpoints"]
-            Recommend["POST /api/recommend"]
-            ChatAPI["POST /api/chat"]
-            Suppliers["GET /api/suppliers"]
-            Health["GET /api/health"]
-        end
-
-        FAISS["FAISS Vector Index<br/>all-MiniLM-L6-v2<br/>13 part categories"]
+        RecommendAPI["POST /api/recommend"]
+        ChatAPI["POST /api/chat"]
     end
 
-    subgraph DataSources["Data Sources (/data)"]
-        Orders["supplier_orders.csv<br/>500 purchase orders"]
-        Inspections["quality_inspections.csv<br/>200 inspections"]
-        RFQ["rfq_responses.csv<br/>92 quotes"]
-        Notes["supplier_notes.txt<br/>Team feedback"]
+    RecommendAPI -- "query vector" --> FAISS["FAISS Index<br/>all-MiniLM-L6-v2"]
+    FAISS -- "matched category" --> RecommendAPI
+    RecommendAPI -- "lookup scores" --> ScoreStep
+    RecommendAPI -- "JSON" --> RecCards
+
+    ChatAPI -- "scores + notes<br/>in system prompt" --> Claude["Anthropic Claude API<br/>claude-sonnet-4-20250514"]
+    Claude -- "response" --> ChatAPI
+    ChatAPI -- "JSON" --> ChatUI
+
+    subgraph Data["Data Files"]
+        direction TB
+        D1["supplier_orders.csv<br/>500 purchase orders"]
+        D2["quality_inspections.csv<br/>200 inspections"]
+        D3["rfq_responses.csv<br/>92 quotes"]
+        D4["supplier_notes.txt<br/>Team feedback"]
     end
 
-    subgraph External["External Services"]
-        Claude["Anthropic Claude API<br/>claude-sonnet-4-20250514"]
-    end
+    D1 --> CSV
+    D2 --> CSV
+    D3 --> CSV
+    D4 --> CSV
 
-    %% Data flow
-    Orders --> Load
-    Inspections --> Load
-    RFQ --> Load
-    Notes --> Load
-    Load --> Normalize --> Join --> Score
-
-    %% User flow
-    Browser --> Input
-    Input -->|"POST {part_type}"| Recommend
-    Recommend -->|"vector search"| FAISS
-    FAISS -->|"matched category"| Recommend
-    Recommend -->|"lookup scores"| Score
-    Recommend -->|"JSON response"| Cards
-
-    Chat -->|"POST {message}"| ChatAPI
-    ChatAPI -->|"system prompt + scores"| Claude
-    Claude -->|"response"| ChatAPI
-    ChatAPI -->|"JSON reply"| Chat
-
-    %% Styling
-    classDef data fill:#f9f9f9,stroke:#ccc
-    classDef api fill:#e8f4e8,stroke:#4a4
-    classDef external fill:#e8e8f4,stroke:#44a
-    class Orders,Inspections,RFQ,Notes data
-    class Recommend,ChatAPI,Suppliers,Health api
-    class Claude external
+    style Frontend fill:#f8f9fa,stroke:#dee2e6,stroke-width:2px
+    style Backend fill:#e8f5e9,stroke:#a5d6a7,stroke-width:2px
+    style Startup fill:#e3f2fd,stroke:#90caf9,stroke-width:2px
+    style Data fill:#fff8e1,stroke:#ffe082,stroke-width:2px
+    style Claude fill:#ede7f6,stroke:#b39ddb,stroke-width:2px
+    style FAISS fill:#e3f2fd,stroke:#64b5f6,stroke-width:2px
 ```
 
-## Recommendation Flow (Detail)
+---
+
+## Recommendation Flow
 
 ```mermaid
-flowchart LR
-    A["User types:<br/>'200 aluminum heat exchangers'"] --> B["FAISS vector search<br/>sentence-transformers"]
-    B --> C["Matched category: HX"]
-    C --> D["Lookup all suppliers<br/>with HX history"]
-    D --> E["Rank by TCO<br/>effective_cost = price ×<br/>(1 + rej×0.5 + late×0.2)"]
-    E --> F["Specialist tiebreaker"]
-    F --> G["Return top 3:<br/>✅ Recommended<br/>🔵 Alternative<br/>🔴 Avoid"]
+graph TD
+    A["User types:<br/>'200 aluminum heat exchangers'"]
+    A --> B
+
+    B["FAISS Vector Search<br/>Embed query with sentence-transformers<br/>Find nearest part category"]
+    B --> C
+
+    C["Matched Category: HX<br/>Heat Exchangers"]
+    C --> D
+
+    D["Find All Suppliers<br/>with HX order history"]
+    D --> E
+
+    E["Rank by TCO<br/>effective_cost = price × 1 + rej×0.5 + late×0.2"]
+    E --> F
+
+    F["Apply Specialist Tiebreaker<br/>From team notes and domain knowledge"]
+    F --> G
+
+    G["Return 3 Results"]
+    G --> H["✅ Recommended<br/>Lowest true cost"]
+    G --> I["🔵 Alternative<br/>Second best option"]
+    G --> J["🔴 Avoid<br/>Highest true cost + warnings"]
+
+    style A fill:#f8f9fa,stroke:#dee2e6,stroke-width:2px
+    style B fill:#e3f2fd,stroke:#64b5f6,stroke-width:2px
+    style C fill:#e8f5e9,stroke:#a5d6a7,stroke-width:2px
+    style E fill:#fff3e0,stroke:#ffb74d,stroke-width:2px
+    style H fill:#e8f5e9,stroke:#66bb6a,stroke-width:2px
+    style I fill:#e3f2fd,stroke:#42a5f5,stroke-width:2px
+    style J fill:#ffebee,stroke:#ef5350,stroke-width:2px
 ```
 
-## TCO Formula
+---
+
+## TCO Formula Example: QuickFab on Heat Exchangers
 
 ```mermaid
-graph LR
-    A["Unit Price<br/>$1,473"] --> D
-    B["Rejection Rate<br/>16.3% × 0.5"] --> D
-    C["Late Rate<br/>62.5% × 0.2"] --> D
-    D["Effective Cost<br/>$1,473 × (1 + 0.082 + 0.125)<br/>= $1,777"]
+graph TD
+    Price["Unit Price<br/><b>$1,473</b>"]
+    Rej["Rejection Penalty<br/>16.3% reject × 0.5 rework cost<br/><b>+ $120</b>"]
+    Late["Late Delivery Penalty<br/>62.5% late × 0.2 delay cost<br/><b>+ $184</b>"]
 
-    style A fill:#e8f4e8
-    style B fill:#fde8e8
-    style C fill:#fde8e8
-    style D fill:#f4e8e8,stroke:#c44,stroke-width:2px
+    Price --> Total
+    Rej --> Total
+    Late --> Total
+
+    Total["Effective Cost per Unit<br/><b>$1,777</b><br/>$304 more than sticker price"]
+
+    Compare["Compare to Apex Manufacturing<br/>Unit Price: $1,627<br/>Effective Cost: <b>$1,648</b><br/>Looks more expensive, actually cheaper"]
+
+    Total --> Compare
+
+    style Price fill:#e8f5e9,stroke:#66bb6a,stroke-width:2px
+    style Rej fill:#ffebee,stroke:#ef5350,stroke-width:2px
+    style Late fill:#ffebee,stroke:#ef5350,stroke-width:2px
+    style Total fill:#fce4ec,stroke:#e53935,stroke-width:3px
+    style Compare fill:#e8f5e9,stroke:#2e7d32,stroke-width:3px
 ```
